@@ -39,7 +39,7 @@ func NewUserController(svc *service.UserService) *UserController { return &UserC
 //
 // Update is POST /{userId}, not PUT. That is what the Java controller declared, and
 // changing it would break existing clients even though it reads oddly.
-func (h *UserController) Register(mux *http.ServeMux) {
+func (h *UserController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/users", h.list)
 	mux.HandleFunc("POST /api/v1/users", h.create)
 	mux.HandleFunc("GET /api/v1/users/{userId}", h.get)

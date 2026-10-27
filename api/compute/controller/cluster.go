@@ -39,7 +39,7 @@ func NewSlurmClusterController(svc *service.SlurmClusterService) *SlurmClusterCo
 }
 
 // Register mounts the cluster routes.
-func (h *SlurmClusterController) Register(mux *http.ServeMux) {
+func (h *SlurmClusterController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/slurm-clusters", h.list)
 	mux.HandleFunc("POST /api/v1/slurm-clusters", h.create)
 	mux.HandleFunc("GET /api/v1/slurm-clusters/{slurmClusterId}", h.get)
@@ -112,7 +112,7 @@ func NewClusterPartitionController(svc *service.ClusterPartitionService) *Cluste
 }
 
 // Register mounts the partition routes as a sub-resource of a cluster.
-func (h *ClusterPartitionController) Register(mux *http.ServeMux) {
+func (h *ClusterPartitionController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/slurm-clusters/{slurmClusterId}/partitions", h.list)
 	mux.HandleFunc("POST /api/v1/slurm-clusters/{slurmClusterId}/partitions", h.create)
 	mux.HandleFunc("GET /api/v1/slurm-clusters/{slurmClusterId}/partitions/{partitionId}", h.get)

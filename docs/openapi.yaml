@@ -91,6 +91,10 @@ tags:
     description: Hosts data is staged to and from over SCP.
   - name: Data Products
     description: Registered datasets on a storage.
+  - name: Virtual Datasets
+    description: >-
+      Trees of directories and files that reference registered data products. Placing
+      a product in a tree never moves or copies data.
   - name: Sharing
     description: >-
       Granting access to a shareable record. One shape for every resource kind: the
@@ -1515,6 +1519,317 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  # ---------------------------------------------------------------- Virtual Datasets
+
+  /api/v1/virtual-data-directories:
+    get:
+      tags: [Virtual Datasets]
+      summary: List all virtual data directories
+      description: |
+        Every directory node across every dataset. Requires `ADMIN` or `SUPER_ADMIN`
+        authority, since the listing names who holds what data.
+      operationId: listVirtualDataDirectories
+      responses:
+        "200":
+          description: Every directory node.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Virtual Datasets]
+      summary: Create a virtual data directory
+      description: |
+        With no `parentDirectoryId` the node is the root of a new dataset, owned by the
+        caller. With one it is placed inside an existing dataset, which needs a `WRITE`
+        standing there, and it inherits that dataset's owner rather than belonging to
+        the caller.
+
+        A parent that stands for a data product cannot hold entries (`409`), and a name
+        already taken by a sibling directory or file is refused (`409`). A
+        `dataProductId` must name a directory product the caller can read.
+      operationId: createVirtualDataDirectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VirtualDataDirectoryRequest" }
+      responses:
+        "201":
+          description: The created directory.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-directories/me:
+    get:
+      tags: [Virtual Datasets]
+      summary: List the roots of the caller's datasets
+      description: |
+        Roots only. Every other node is reached by walking down from one of these
+        through `/contents`.
+      operationId: listMyVirtualDataDirectories
+      responses:
+        "200":
+          description: The roots of the datasets the caller owns.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-directories/shared-with-me:
+    get:
+      tags: [Virtual Datasets]
+      summary: List virtual data directories shared with the caller
+      description: |
+        The nodes the shares name, directly or through a group. These may be interior
+        nodes: a share opens a subtree, and its top is as far up as the grantee can see.
+        Each entry carries `permission`, the caller's effective standing.
+      operationId: listVirtualDataDirectoriesSharedWithMe
+      responses:
+        "200":
+          description: The directories shared with the caller.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-directories/{virtualDataDirectoryId}:
+    parameters:
+      - $ref: "#/components/parameters/VirtualDataDirectoryId"
+    get:
+      tags: [Virtual Datasets]
+      summary: Read a virtual data directory
+      description: |
+        The node without its contents. Requires a `READ` standing, which is inherited
+        down the tree: an owner of, or a share on, any ancestor reaches this node.
+      operationId: getVirtualDataDirectory
+      responses:
+        "200":
+          description: The directory, carrying the caller's `permission`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Virtual Datasets]
+      summary: Update a virtual data directory
+      description: |
+        Renames the node, re-points the product it stands for, or moves it. Requires a
+        `WRITE` standing on the node, and on the destination too when it moves.
+
+        The update replaces the whole node, so `parentDirectoryId` must be sent back
+        unchanged to keep the node where it is: omitting it makes the node a root. A
+        move into the node's own subtree is refused (`409`). The owner is never
+        changed.
+      operationId: updateVirtualDataDirectory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VirtualDataDirectoryRequest" }
+      responses:
+        "200":
+          description: The updated directory.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Virtual Datasets]
+      summary: Delete a virtual data directory and its subtree
+      description: |
+        Removes the node, everything under it, and every share on those nodes. An
+        owner in the node's lineage or an admin only: the subtree can hold nodes other
+        people were granted access to. The data products the tree cited stay
+        registered.
+      operationId: deleteVirtualDataDirectory
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-directories/{virtualDataDirectoryId}/contents:
+    parameters:
+      - $ref: "#/components/parameters/VirtualDataDirectoryId"
+    get:
+      tags: [Virtual Datasets]
+      summary: Read a virtual data directory with its entries
+      description: |
+        The node with the files and directories directly under it, one level only;
+        callers walk down a level at a time. Requires a `READ` standing. Every entry
+        carries the node's `permission`, since nothing below a node can grant less.
+
+        `virtualDataFiles` and `virtualDataDirectories` are always present, empty
+        included, except on a directory that stands for a data product: its contents
+        are whatever is on disk, so both are omitted.
+      operationId: getVirtualDataDirectoryContents
+      responses:
+        "200":
+          description: The directory and its immediate entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-directories/{virtualDataDirectoryId}/files:
+    parameters:
+      - $ref: "#/components/parameters/VirtualDataDirectoryId"
+    get:
+      tags: [Virtual Datasets]
+      summary: List the files in a virtual data directory
+      description: The files directly under the directory. Requires a `READ` standing on it.
+      operationId: listVirtualDataFiles
+      responses:
+        "200":
+          description: The files, each carrying the directory's `permission`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VirtualDataFileResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-files:
+    post:
+      tags: [Virtual Datasets]
+      summary: Place a file in a virtual data directory
+      description: |
+        Requires a `WRITE` standing on the parent directory and a `READ` standing on
+        the data product, which must be a file product. A parent that stands for a data
+        product cannot hold entries (`409`), and a name already taken by a sibling is
+        refused (`409`).
+      operationId: createVirtualDataFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VirtualDataFileRequest" }
+      responses:
+        "201":
+          description: The placed file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataFileResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /api/v1/virtual-data-files/{virtualDataFileId}:
+    parameters:
+      - $ref: "#/components/parameters/VirtualDataFileId"
+    get:
+      tags: [Virtual Datasets]
+      summary: Read a virtual data file
+      description: |
+        Requires a `READ` standing on the directory holding the file. A file carries no
+        shares of its own.
+      operationId: getVirtualDataFile
+      responses:
+        "200":
+          description: The file, carrying the caller's `permission`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataFileResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Virtual Datasets]
+      summary: Update a virtual data file
+      description: |
+        Renames the file, re-points the product it stands for, or moves it to another
+        directory. Requires a `WRITE` standing on the directory holding it, and on the
+        destination too when it moves.
+      operationId: updateVirtualDataFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VirtualDataFileRequest" }
+      responses:
+        "200":
+          description: The updated file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VirtualDataFileResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Virtual Datasets]
+      summary: Remove a file from its virtual data directory
+      description: |
+        Requires a `WRITE` standing on the directory holding it. The data product the
+        file cited stays registered.
+      operationId: deleteVirtualDataFile
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /api/v1/processes:
     get:
       tags: [Processes]
@@ -2093,6 +2408,7 @@ paths:
     get:
       tags: [Sharing]
       summary: List who has access to this SCP data storage
+      operationId: listSCPDataStorageShares
       description: >-
         Both principal kinds together. Restricted to the owner and platform admins:
         the list names who holds the record, which is more than a grantee needs to
@@ -2113,6 +2429,7 @@ paths:
     post:
       tags: [Sharing]
       summary: Grant a principal access to this SCP data storage
+      operationId: shareSCPDataStorage
       requestBody:
         required: true
         content:
@@ -2139,6 +2456,7 @@ paths:
     put:
       tags: [Sharing]
       summary: Change what a grant confers
+      operationId: updateSCPDataStorageShare
       description: >-
         Only the permission is editable. The subject is fixed when the grant is
         created, because moving it to a different principal would be a revoke and a
@@ -2163,6 +2481,7 @@ paths:
     delete:
       tags: [Sharing]
       summary: Revoke a grant
+      operationId: revokeSCPDataStorageShare
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -2177,6 +2496,7 @@ paths:
     get:
       tags: [Sharing]
       summary: List who has access to this data product
+      operationId: listDataProductShares
       description: >-
         Both principal kinds together. Restricted to the owner and platform admins:
         the list names who holds the record, which is more than a grantee needs to
@@ -2197,6 +2517,7 @@ paths:
     post:
       tags: [Sharing]
       summary: Grant a principal access to this data product
+      operationId: shareDataProduct
       requestBody:
         required: true
         content:
@@ -2223,6 +2544,7 @@ paths:
     put:
       tags: [Sharing]
       summary: Change what a grant confers
+      operationId: updateDataProductShare
       description: >-
         Only the permission is editable. The subject is fixed when the grant is
         created, because moving it to a different principal would be a revoke and a
@@ -2247,6 +2569,7 @@ paths:
     delete:
       tags: [Sharing]
       summary: Revoke a grant
+      operationId: revokeDataProductShare
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -2261,6 +2584,7 @@ paths:
     get:
       tags: [Sharing]
       summary: List who has access to this virtual data directory
+      operationId: listVirtualDataDirectoryShares
       description: >-
         Both principal kinds together. Restricted to the owner and platform admins:
         the list names who holds the record, which is more than a grantee needs to
@@ -2281,6 +2605,7 @@ paths:
     post:
       tags: [Sharing]
       summary: Grant a principal access to this virtual data directory
+      operationId: shareVirtualDataDirectory
       requestBody:
         required: true
         content:
@@ -2307,6 +2632,7 @@ paths:
     put:
       tags: [Sharing]
       summary: Change what a grant confers
+      operationId: updateVirtualDataDirectoryShare
       description: >-
         Only the permission is editable. The subject is fixed when the grant is
         created, because moving it to a different principal would be a revoke and a
@@ -2331,6 +2657,7 @@ paths:
     delete:
       tags: [Sharing]
       summary: Revoke a grant
+      operationId: revokeVirtualDataDirectoryShare
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -2345,6 +2672,7 @@ paths:
     get:
       tags: [Sharing]
       summary: List who has access to this Slurm cluster config
+      operationId: listSlurmClusterConfigShares
       description: >-
         Both principal kinds together. Restricted to the owner and platform admins:
         the list names who holds the record, which is more than a grantee needs to
@@ -2365,6 +2693,7 @@ paths:
     post:
       tags: [Sharing]
       summary: Grant a principal access to this Slurm cluster config
+      operationId: shareSlurmClusterConfig
       requestBody:
         required: true
         content:
@@ -2391,6 +2720,7 @@ paths:
     put:
       tags: [Sharing]
       summary: Change what a grant confers
+      operationId: updateSlurmClusterConfigShare
       description: >-
         Only the permission is editable. The subject is fixed when the grant is
         created, because moving it to a different principal would be a revoke and a
@@ -2415,6 +2745,7 @@ paths:
     delete:
       tags: [Sharing]
       summary: Revoke a grant
+      operationId: revokeSlurmClusterConfigShare
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -2495,6 +2826,11 @@ components:
       schema: { type: string, format: uuid }
     VirtualDataDirectoryId:
       name: virtualDataDirectoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VirtualDataFileId:
+      name: virtualDataFileId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3020,6 +3356,14 @@ components:
           type: boolean
           description: |
             Spelled `required` on the wire, not `isRequired`.
+        defaultValue:
+          type: [string, "null"]
+          description: |
+            A JSON document in the same form as `InputMapping.value`. It is used when
+            a run maps this input with a null `value`; a run that leaves the input out
+            of `inputMappings` altogether does not get it. It is not used when a
+            `FILE` input is staged at launch, which needs a data product id in the
+            mapping itself.
       required: [inputName, inputType]
 
     TemplateOutput:
@@ -3109,7 +3453,13 @@ components:
         slurmClusterId: { type: [string, "null"], format: uuid }
         slurmRunSection:
           type: string
-          description: The run script section a job of this deployment executes.
+          description: |
+            The commands a job of this deployment runs: a Jinja template rendered at
+            launch and placed in a submission script whose `#SBATCH` directives
+            Airavata writes itself. It sees `inputs` (input name → list of strings),
+            `outputs` (output name → path), `work_dir`, `process_id` and the run's
+            resource fields, e.g. `{{ inputs.fastaFile[0] }}`. See "Run Section
+            Template" in docs/api.md for the full context.
         defaultBatchJobConfig:
           allOf: [{ $ref: "#/components/schemas/BatchJobConfigRequest" }]
           description: |
@@ -3221,6 +3571,77 @@ components:
 
     # -------------------------------------------------------- Process
 
+    VirtualDataDirectoryRequest:
+      type: object
+      description: |
+        The create/update payload for a directory node. There is no owner field. A
+        directory either holds entries or stands for a registered directory product
+        (`dataProductId`), never both.
+      properties:
+        directoryName:
+          type: string
+          description: One path segment. Cannot be `.` or `..` or contain `/`, `\` or NUL.
+        parentDirectoryId:
+          type: [string, "null"]
+          format: uuid
+          description: |
+            Where the node sits. Null or omitted means a root. Changing it on an
+            update moves the node.
+        dataProductId:
+          type: [string, "null"]
+          format: uuid
+          description: "A directory data product (`isFile: false`) the caller can read."
+      required: [directoryName]
+    VirtualDataDirectoryResponse:
+      type: object
+      properties:
+        virtualDataDirectoryId: { type: string, format: uuid }
+        directoryName: { type: [string, "null"] }
+        parentDirectoryId: { type: [string, "null"], format: uuid }
+        dataProductId: { type: [string, "null"], format: uuid }
+        ownerId: { type: [string, "null"] }
+        createdAt: { type: integer, format: int64 }
+        permission:
+          type: string
+          description: |
+            What the calling principal may do with this node. Present on every
+            response except the admin listing; always `WRITE` on `/me`.
+          enum: [READ, WRITE]
+        virtualDataFiles:
+          type: array
+          description: Present only on `/contents`.
+          items: { $ref: "#/components/schemas/VirtualDataFileResponse" }
+        virtualDataDirectories:
+          type: array
+          description: Present only on `/contents`.
+          items: { $ref: "#/components/schemas/VirtualDataDirectoryResponse" }
+      required: [virtualDataDirectoryId, createdAt]
+    VirtualDataFileRequest:
+      type: object
+      description: The create/update payload for a file. Both references are required.
+      properties:
+        fileName:
+          type: string
+          description: One path segment. Cannot be `.` or `..` or contain `/`, `\` or NUL.
+        parentDirectoryId: { type: string, format: uuid }
+        dataProductId:
+          type: string
+          format: uuid
+          description: "A file data product (`isFile: true`) the caller can read."
+      required: [fileName, parentDirectoryId, dataProductId]
+    VirtualDataFileResponse:
+      type: object
+      properties:
+        virtualDataFileId: { type: string, format: uuid }
+        fileName: { type: [string, "null"] }
+        parentDirectoryId: { type: [string, "null"], format: uuid }
+        dataProductId: { type: [string, "null"], format: uuid }
+        createdAt: { type: integer, format: int64 }
+        permission:
+          type: string
+          description: Inherited from the directory holding the file.
+          enum: [READ, WRITE]
+      required: [virtualDataFileId, createdAt]
     InputMapping:
       type: object
       description: |

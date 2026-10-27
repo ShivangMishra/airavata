@@ -43,7 +43,7 @@ func NewSlurmClusterConfigController(svc *service.SlurmClusterConfigService) *Sl
 //
 // The literal /me and /shared-with-me patterns take precedence over
 // /{slurmClusterConfigId}, so neither is ever mistaken for a config id.
-func (h *SlurmClusterConfigController) Register(mux *http.ServeMux) {
+func (h *SlurmClusterConfigController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/slurm-cluster-configs", h.list)
 	mux.HandleFunc("GET /api/v1/slurm-cluster-configs/me", h.listMine)
 	mux.HandleFunc("GET /api/v1/slurm-cluster-configs/shared-with-me", h.listSharedWithMe)

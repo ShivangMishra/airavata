@@ -928,7 +928,7 @@ DEPLOYMENT_ID=$(curl -s -X POST localhost:9095/api/v1/slurm-deployments \
   -d '{
     "templateId": "'"$TEMPLATE_ID"'",
     "slurmClusterId": "'"$CLUSTER_ID"'",
-    "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths=$fastaFile --model_preset=$modelPreset",
+    "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths={{ inputs.fastaFile[0] }} --model_preset={{ inputs.modelPreset[0] }}",
     "defaultBatchJobConfig": {
       "wallTimeMinutes": 720,
       "allocation": "TG-BIO210001",
@@ -972,7 +972,7 @@ DEPLOYMENT_ID=$(curl -s -X POST localhost:9095/api/v1/slurm-deployments \
 {
   "templateId": "b6f1c2de-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
   "slurmClusterId": "c1d2e3f4-5678-4abc-9def-0123456789ab",
-  "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths=$fastaFile --model_preset=$modelPreset",
+  "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths={{ inputs.fastaFile[0] }} --model_preset={{ inputs.modelPreset[0] }}",
   "defaultBatchJobConfig": {
     "wallTimeMinutes": 720,
     "allocation": "TG-BIO210001",
@@ -996,7 +996,7 @@ DEPLOYMENT_ID=$(curl -s -X POST localhost:9095/api/v1/slurm-deployments \
   "deploymentId": "e5f6a7b8-9cde-4f01-8234-56789abcdef0",
   "templateId": "b6f1c2de-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
   "slurmClusterId": "c1d2e3f4-5678-4abc-9def-0123456789ab",
-  "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths=$fastaFile --model_preset=$modelPreset",
+  "slurmRunSection": "module load alphafold\nrun_alphafold.sh --fasta_paths={{ inputs.fastaFile[0] }} --model_preset={{ inputs.modelPreset[0] }}",
   "defaultBatchJobConfig": {
     "batchJobConfigId": "f6a7b8c9-de01-4f23-9456-789abcdef012",
     "wallTimeMinutes": 720,
@@ -1034,6 +1034,37 @@ Returned when e.g. `templateId` or `slurmRunSection` is blank, `defaultBatchJobC
   ]
 }
 ```
+
+### Run Section Template
+
+`slurmRunSection` is a [Jinja](https://github.com/flosch/pongo2) template, not a shell fragment with variables already set. When a run is launched, Airavata renders it and places the result in a submission script it writes itself. That script owns every `#SBATCH` directive: job name, `--chdir`, `--output`/`--error`, `--time`, mail settings, account, partition and the resource flags taken from the run's `batchJobConfig`. A run section therefore holds only the commands to run, and runs with the run's work directory as its current directory.
+
+The run section is rendered first, with its result then inserted as plain text, so a value a user supplied for an input is never itself read as template source.
+
+| Variable | Type | Value |
+|---|---|---|
+| `inputs` | map of input name → list of strings | One entry per input the run **maps**. Each value is the mapping's `value` parsed as `{"value": x}` → `[x]`, `{"values": [...]}` or a JSON array → the list, anything else → the raw string as a single item. If the mapping's `value` is null the input's `defaultValue` is used instead; an input left out of `inputMappings` has no entry. Items of `FILE`, `FILE_LIST` and `DIRECTORY` inputs that are not absolute paths are joined onto `work_dir` |
+| `outputs` | map of output name → string | One entry per output the run maps: `work_dir` joined with the output's name, which is where it is collected from after the job |
+| `work_dir` | string | The run's directory on the cluster: `baseWorkDir` (or the cluster config's `workRoot`) followed by `/<process_id>` |
+| `process_id` | string | The process id |
+| `job_name` | string | The Slurm job name (currently the process id) |
+| `stdout_file`, `stderr_file` | string | `work_dir/stdout.txt`, `work_dir/stderr.txt` |
+| `wall_time`, `account`, `partition` | string | The `--time`, `--account` and `--partition` values |
+| `nodes`, `ntasks`, `ntasks_per_node`, `cpus`, `cpus_per_task`, `mem`, `mem_per_cpu`, `gres`, `gpus`, `gpus_per_node`, `mem_per_gpu`, `cpus_per_gpu`, `constraints` | string | The run's resource request; the empty string where it asked for nothing |
+
+Index a list with `[0]` and an output name that is not a plain identifier with `["..."]`:
+
+```jinja
+module load alphafold
+run_alphafold.sh \
+  --fasta_paths={{ inputs.fastaFile[0] }} \
+  --model_preset={{ inputs.modelPreset[0] }} \
+  --output_dir={{ outputs["structure.pdb"] }}
+{% for f in inputs.extraFiles %}cp {{ f }} extras/
+{% endfor %}
+```
+
+**Known issue — `FILE` inputs.** At launch a `FILE` input's mapping `value` is read as a data product id, and that product is staged to `work_dir/<inputName>`. The template variable, though, is built from the same raw `value`, so `{{ inputs.fastaFile[0] }}` renders as `work_dir/<dataProductId>`, not the path the file was staged to. Until the two agree, refer to a staged `FILE` input by its staged path, `{{ work_dir }}/fastaFile`. `FILE_LIST` and `DIRECTORY` inputs are not staged at launch.
 
 ## SCP Data Storages
 
@@ -1322,6 +1353,101 @@ curl -s -X POST localhost:9095/api/v1/data-products/"$DATA_PRODUCT_ID"/shares \
 ```
 
 The request body, the response shape and the errors are identical for all four shareable records and are documented once in **[sharing.md](sharing.md)**.
+
+## Virtual Datasets
+
+A virtual dataset is a tree of directories and files that reference already-registered [data products](#data-products). Building one never moves or copies data: it records that a product appears at a place in a tree, which is why placing a product needs only `READ` on the product.
+
+A directory either **holds entries** (child directories and files) or **stands for a directory product** (`dataProductId` set, with `isFile: false`), never both. A file always stands for a file product (`isFile: true`) and always sits under a directory.
+
+Access is granted on directories and inherited down the tree. Owning a dataset's root is owning all of it, and a share on any directory opens the whole subtree under it. A file carries no owner or shares of its own; it is reached through the directory holding it.
+
+| Standing | May do |
+|---|---|
+| `READ` (share on the node or an ancestor) | read nodes and list contents |
+| `WRITE` (share on the node or an ancestor) | the above, and create, rename, re-point and move nodes and files under it |
+| Owner in the lineage (or admin) | the above, and delete a directory with its subtree, and manage shares |
+
+A node created under a parent belongs to the dataset's owner, not to the grantee who added it. `GET /api/v1/virtual-data-directories` is admin-only, `/me` returns the roots of the caller's own datasets, and `/shared-with-me` the nodes shared with them, which may be interior nodes.
+
+```
+GET    /api/v1/virtual-data-directories
+GET    /api/v1/virtual-data-directories/me
+GET    /api/v1/virtual-data-directories/shared-with-me
+POST   /api/v1/virtual-data-directories
+GET    /api/v1/virtual-data-directories/{virtualDataDirectoryId}
+GET    /api/v1/virtual-data-directories/{virtualDataDirectoryId}/contents
+GET    /api/v1/virtual-data-directories/{virtualDataDirectoryId}/files
+PUT    /api/v1/virtual-data-directories/{virtualDataDirectoryId}
+DELETE /api/v1/virtual-data-directories/{virtualDataDirectoryId}
+
+POST   /api/v1/virtual-data-files
+GET    /api/v1/virtual-data-files/{virtualDataFileId}
+PUT    /api/v1/virtual-data-files/{virtualDataFileId}
+DELETE /api/v1/virtual-data-files/{virtualDataFileId}
+```
+
+### Build a Dataset
+
+Uses `$FASTA_DATA_ID` (a file product) from [Register the Run's Data Products](#register-the-runs-data-products).
+
+```bash
+# A root: the top of a new dataset, owned by the caller.
+ROOT_ID=$(curl -s -X POST localhost:9095/api/v1/virtual-data-directories \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "directoryName": "alphafold-inputs" }' | jq -r '.virtualDataDirectoryId')
+
+# A container inside it.
+SEQS_ID=$(curl -s -X POST localhost:9095/api/v1/virtual-data-directories \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "directoryName": "sequences", "parentDirectoryId": "'"$ROOT_ID"'" }' | jq -r '.virtualDataDirectoryId')
+
+# A file product placed in the container.
+curl -s -X POST localhost:9095/api/v1/virtual-data-files \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fileName": "target.fasta", "parentDirectoryId": "'"$SEQS_ID"'", "dataProductId": "'"$FASTA_DATA_ID"'" }'
+
+# One level at a time.
+curl -s localhost:9095/api/v1/virtual-data-directories/"$ROOT_ID"/contents -H "Authorization: Bearer $TOKEN"
+```
+
+**Directory request body**
+
+| Field | Type | Notes |
+|---|---|---|
+| `directoryName` | string | required; one path segment, so not `.` or `..` and no `/`, `\` or NUL; unique among its siblings, files included |
+| `parentDirectoryId` | string \| null | null or omitted makes a root; changing it on `PUT` moves the node |
+| `dataProductId` | string \| null | a directory product the caller can read; a directory with one cannot hold entries |
+
+**File request body**
+
+| Field | Type | Notes |
+|---|---|---|
+| `fileName` | string | required; same naming rules as `directoryName` |
+| `parentDirectoryId` | string | required; a directory that holds entries, on which the caller has `WRITE` |
+| `dataProductId` | string | required; a file product the caller can read |
+
+`PUT` replaces the whole node, as everywhere else in this API. Renaming a nested directory therefore means sending its `parentDirectoryId` back too; leaving it out moves the node out to become a root. A move needs `WRITE` on both the source and the destination, and moving a directory into its own subtree is `409 Conflict`.
+
+`/contents` returns the directory with `virtualDataFiles` and `virtualDataDirectories`, both always present, except on a directory that stands for a product: its contents are whatever is on disk, so neither list is sent. Every entry carries the directory's `permission`.
+
+`DELETE` on a directory removes its whole subtree and every share on it; `DELETE` on a file removes it from its directory. Neither touches the data products the tree cited.
+
+Other `409 Conflict` cases: a sibling already has the name, the parent stands for a product, or a broken or cyclic lineage is found while resolving access.
+
+### Share a Virtual Dataset
+
+```
+GET    /api/v1/virtual-data-directories/{virtualDataDirectoryId}/shares
+POST   /api/v1/virtual-data-directories/{virtualDataDirectoryId}/shares
+PUT    /api/v1/virtual-data-directories/{virtualDataDirectoryId}/shares/{sharingId}
+DELETE /api/v1/virtual-data-directories/{virtualDataDirectoryId}/shares/{sharingId}
+```
+
+A share on a directory opens its whole subtree. The body and errors are documented in **[sharing.md](sharing.md)**.
 
 ## Groups
 

@@ -44,7 +44,7 @@ func NewDataTransferController(svc *service.DataTransferService) *DataTransferCo
 	return &DataTransferController{svc: svc}
 }
 
-func (h *DataTransferController) Register(mux *http.ServeMux) {
+func (h *DataTransferController) Register(mux httpx.Router) {
 	const base = "/api/v1/data-products/{dataProductId}/content"
 
 	mux.HandleFunc("GET "+base, h.download)

@@ -42,7 +42,7 @@ func NewDataProductController(svc *service.DataProductService) *DataProductContr
 //
 // The literal /me and /shared-with-me patterns take precedence over /{dataProductId},
 // so neither is ever mistaken for a product id.
-func (h *DataProductController) Register(mux *http.ServeMux) {
+func (h *DataProductController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/data-products", h.list)
 	mux.HandleFunc("GET /api/v1/data-products/me", h.listMine)
 	mux.HandleFunc("GET /api/v1/data-products/shared-with-me", h.listSharedWithMe)

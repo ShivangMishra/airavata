@@ -46,6 +46,16 @@ import (
 // over the same database.
 func New(cfg config.Config, svcs *app.Services, introspector auth.Introspector) http.Handler {
 	mux := http.NewServeMux()
+	Routes(mux, svcs)
+
+	// Outermost first: CORS answers preflights before authentication runs, since a
+	// preflight carries no credentials by definition.
+	return cors(cfg.CORSAllowedOrigins)(auth.Middleware(introspector)(mux))
+}
+
+// Routes mounts every route the server answers on mux. It is the whole route table,
+// which is what lets a test hold it against docs/openapi.yaml.
+func Routes(mux httpx.Router, svcs *app.Services) {
 	iamctl.NewUserController(svcs.User).Register(mux)
 	iamctl.NewGroupController(svcs.Group).Register(mux)
 	iamctl.NewGroupMemberController(svcs.GroupMember).Register(mux)
@@ -78,10 +88,6 @@ func New(cfg config.Config, svcs *app.Services, introspector auth.Introspector) 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 	})
-
-	// Outermost first: CORS answers preflights before authentication runs, since a
-	// preflight carries no credentials by definition.
-	return cors(cfg.CORSAllowedOrigins)(auth.Middleware(introspector)(mux))
 }
 
 // cors applies the airavata.cors.allowed-origins policy.

@@ -42,7 +42,7 @@ func NewGroupController(svc *service.GroupService) *GroupController {
 //
 // /groups/me is registered alongside /groups/{groupId}; the literal segment wins for
 // that exact path, the same way /slurm-cluster-configs/me does.
-func (h *GroupController) Register(mux *http.ServeMux) {
+func (h *GroupController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/groups", h.list)
 	mux.HandleFunc("GET /api/v1/groups/me", h.listMine)
 	mux.HandleFunc("POST /api/v1/groups", h.create)
@@ -123,7 +123,7 @@ func NewGroupMemberController(svc *service.GroupMemberService) *GroupMemberContr
 }
 
 // Register mounts the membership routes.
-func (h *GroupMemberController) Register(mux *http.ServeMux) {
+func (h *GroupMemberController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/groups/{groupId}/members", h.list)
 	mux.HandleFunc("POST /api/v1/groups/{groupId}/members", h.add)
 	mux.HandleFunc("GET /api/v1/groups/{groupId}/members/{userId}", h.get)

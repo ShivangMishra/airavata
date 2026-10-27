@@ -51,7 +51,7 @@ func New(svc *service.Service, basePath, resourceParam string) *Controller {
 }
 
 // Register mounts the sharing routes under one resource.
-func (h *Controller) Register(mux *http.ServeMux) {
+func (h *Controller) Register(mux httpx.Router) {
 	base := h.basePath + "/{" + h.resourceID + "}/shares"
 
 	mux.HandleFunc("GET "+base, h.list)

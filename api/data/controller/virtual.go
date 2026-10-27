@@ -43,7 +43,7 @@ func NewVirtualDataDirectoryController(svc *service.VirtualDataDirectoryService)
 //
 // The literal /me and /shared-with-me patterns take precedence over
 // /{virtualDataDirectoryId}, so neither is ever mistaken for a directory id.
-func (h *VirtualDataDirectoryController) Register(mux *http.ServeMux) {
+func (h *VirtualDataDirectoryController) Register(mux httpx.Router) {
 	const base = "/api/v1/virtual-data-directories"
 
 	mux.HandleFunc("GET "+base, h.list)
@@ -153,7 +153,7 @@ func NewVirtualDataFileController(svc *service.VirtualDataFileService) *VirtualD
 }
 
 // Register mounts the virtual data file routes.
-func (h *VirtualDataFileController) Register(mux *http.ServeMux) {
+func (h *VirtualDataFileController) Register(mux httpx.Router) {
 	const base = "/api/v1/virtual-data-files"
 
 	mux.HandleFunc("POST "+base, h.create)

@@ -42,7 +42,7 @@ func NewStatusController(svc *service.StatusService) *StatusController {
 }
 
 // Register mounts the read-only status routes.
-func (h *StatusController) Register(mux *http.ServeMux) {
+func (h *StatusController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/processes/{processId}/statuses", h.list)
 	mux.HandleFunc("GET /api/v1/processes/{processId}/statuses/{statusId}", h.get)
 }

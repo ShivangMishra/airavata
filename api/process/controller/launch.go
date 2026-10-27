@@ -42,7 +42,7 @@ func NewLaunchController(svc *service.LaunchService) *LaunchController {
 
 // Register mounts the launch route. The literal /launch segment cannot collide with
 // the task collections beside it, so no ordering is implied.
-func (h *LaunchController) Register(mux *http.ServeMux) {
+func (h *LaunchController) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/processes/{processId}/launch", h.launch)
 }
 

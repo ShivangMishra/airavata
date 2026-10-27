@@ -45,7 +45,7 @@ type TaskController[T any, Req any, Res any] struct {
 }
 
 // Register mounts the task routes for this kind.
-func (h *TaskController[T, Req, Res]) Register(mux *http.ServeMux) {
+func (h *TaskController[T, Req, Res]) Register(mux httpx.Router) {
 	base := "/api/v1/processes/{processId}/" + h.path
 
 	mux.HandleFunc("GET "+base, h.list)

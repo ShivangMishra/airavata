@@ -43,7 +43,7 @@ func NewSCPDataStorageController(svc *service.SCPDataStorageService) *SCPDataSto
 //
 // The literal /me and /shared-with-me patterns take precedence over /{dataStorageId},
 // so neither is ever mistaken for a storage id.
-func (h *SCPDataStorageController) Register(mux *http.ServeMux) {
+func (h *SCPDataStorageController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/scp-data-storages", h.list)
 	mux.HandleFunc("GET /api/v1/scp-data-storages/me", h.listMine)
 	mux.HandleFunc("GET /api/v1/scp-data-storages/shared-with-me", h.listSharedWithMe)

@@ -39,7 +39,7 @@ func NewSSHCredentialController(svc *service.SSHCredentialService) *SSHCredentia
 }
 
 // Register mounts the SSH credential routes.
-func (h *SSHCredentialController) Register(mux *http.ServeMux) {
+func (h *SSHCredentialController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/ssh-credentials", h.list)
 	mux.HandleFunc("POST /api/v1/ssh-credentials", h.create)
 	mux.HandleFunc("GET /api/v1/ssh-credentials/{sshCredentialId}", h.get)

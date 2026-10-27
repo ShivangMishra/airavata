@@ -39,7 +39,7 @@ func NewTemplateController(svc *service.TemplateService) *TemplateController {
 }
 
 // Register mounts the template routes.
-func (h *TemplateController) Register(mux *http.ServeMux) {
+func (h *TemplateController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/application-templates", h.list)
 	mux.HandleFunc("POST /api/v1/application-templates", h.create)
 	mux.HandleFunc("GET /api/v1/application-templates/{templateId}", h.get)
@@ -112,7 +112,7 @@ func NewBatchDeploymentController(svc *service.BatchDeploymentService) *BatchDep
 }
 
 // Register mounts the deployment routes.
-func (h *BatchDeploymentController) Register(mux *http.ServeMux) {
+func (h *BatchDeploymentController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/slurm-deployments", h.list)
 	mux.HandleFunc("POST /api/v1/slurm-deployments", h.create)
 	mux.HandleFunc("GET /api/v1/slurm-deployments/{deploymentId}", h.get)

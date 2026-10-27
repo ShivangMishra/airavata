@@ -44,7 +44,7 @@ func NewProcessController(svc *service.ProcessService) *ProcessController {
 }
 
 // Register mounts the process routes.
-func (h *ProcessController) Register(mux *http.ServeMux) {
+func (h *ProcessController) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/processes", h.list)
 	mux.HandleFunc("POST /api/v1/processes", h.create)
 	mux.HandleFunc("GET /api/v1/processes/{processId}", h.get)
