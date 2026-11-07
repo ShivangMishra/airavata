@@ -17,9 +17,11 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# Stop: when Go code, go.mod/go.sum or migrations have uncommitted changes, require the
-# definition of done (gofmt clean, go vet, go test) before Claude finishes. Runs once
-# per stop: if Claude is already continuing because of this hook, let it stop.
+# Stop: when Go code, go.mod/go.sum, migrations or docs/openapi.yaml have uncommitted changes,
+# require the definition of done (gofmt clean, generated MCP client current, go vet, go build,
+# go test) before Claude finishes. Plain `go test` rather than `-race` keeps this fast; the race
+# suite is still part of the definition of done before a PR. Runs once per stop: if Claude is
+# already continuing because of this hook, let it stop.
 set -u
 
 input=$(cat)
@@ -27,13 +29,29 @@ input=$(cat)
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
 changed=$({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } 2>/dev/null |
-  grep -E '\.go$|^go\.(mod|sum)$|^internal/db/migrations/' | grep -v '^\.claude/')
+  grep -E '\.go$|^go\.(mod|sum)$|^internal/db/migrations/|^docs/openapi\.yaml$' | grep -v '^\.claude/')
 [[ -z "$changed" ]] && exit 0
 
 report=""
 
 unformatted=$(gofmt -l . 2>&1)
 [[ -n "$unformatted" ]] && report+=$'gofmt -l . lists:\n'"$unformatted"$'\n'
+
+# Compare the client before and after generating, not against HEAD, so an intentional
+# uncommitted regeneration is not flagged.
+gen=internal/mcp/client/client.gen.go
+if [[ -f "$gen" ]]; then
+  before=$(git hash-object "$gen")
+  if ! out=$(go generate ./internal/mcp/client/ 2>&1); then
+    report+=$'go generate ./internal/mcp/client/ failed:\n'"$(head -20 <<<"$out")"$'\n'
+  elif [[ "$(git hash-object "$gen")" != "$before" ]]; then
+    report+=$'internal/mcp/client was stale with docs/openapi.yaml; it has now been regenerated - include it in the change.\n'
+  fi
+fi
+
+if ! out=$(go build ./... 2>&1); then
+  report+=$'go build ./... failed:\n'"$(head -40 <<<"$out")"$'\n'
+fi
 
 if ! out=$(go vet ./... 2>&1); then
   report+=$'go vet ./... failed:\n'"$(head -40 <<<"$out")"$'\n'

@@ -54,7 +54,7 @@ Read `docs/sharing.md` "Notes for implementers" first. Then:
 
 ## 9. Docs
 - `docs/api.md`: a section with the route list and one worked `curl` example per endpoint, matching neighbours.
-- `docs/openapi.yaml`: paths + schemas, copying the neighbouring resource's shape (OpenAPI 3.1; nothing generates or checks it, so diff it by eye).
+- `docs/openapi.yaml`: paths + schemas, copying the neighbouring resource's shape (OpenAPI 3.1), then `go generate ./internal/mcp/client/` and commit `internal/mcp/client/client.gen.go` — CI fails if it is stale.
 - Access-matrix change → `INSTALL.md` "Verifying the installation".
 
 ## Done when

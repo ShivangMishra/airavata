@@ -22,8 +22,8 @@ in this repo. Style that `gofmt`/`go vet` enforce is out of scope. Report only w
 ## Should fix
 
 8. Authz rules tested on one side only (allowed caller but no 401/403 case) in `internal/server/`.
-9. Route or payload change without `docs/api.md` and `docs/openapi.yaml` updates; sharing change without
-   `docs/sharing.md`.
+9. Route or payload change without `docs/api.md` and `docs/openapi.yaml` updates; `docs/openapi.yaml` change without
+   a regenerated `internal/mcp/client/client.gen.go`; sharing change without `docs/sharing.md`.
 10. Side effects (SSH, DB writes, `time.Now`) added inside a go-workflows workflow function instead of an activity.
 11. New `.go` file without the ASF license header; new dependency in `go.mod` without a stated reason.
 12. New comments longer than one short line, or comments that restate the code (CLAUDE.md: default to none).

@@ -20,9 +20,19 @@ Targeted first. Everything below runs in seconds unless flagged.
   `AIRAVATA_TEST_POSTGRES_DSN='postgres://airavata:123456@localhost:15432/airavata?sslmode=disable' go test ./internal/db/`
 - Run the server locally → `/run-local-server` skill.
 
-No Makefile, no codegen, no golangci-lint. CI (`.github/workflows/ci.yml`) = `gofmt -l .` empty, `go vet`, `go build`, `go test -race`.
+- Regenerate the MCP client: `go generate ./internal/mcp/client/` (oapi-codegen, from `docs/openapi.yaml` into
+  `internal/mcp/client/client.gen.go`; never hand-edit that file)
 
-**Definition of done:** `gofmt -l .` prints nothing, `go vet ./...` and `go test ./...` pass — paste the output.
+No Makefile, no golangci-lint. One codegen step: the MCP client above. CI (`.github/workflows/ci.yml`) =
+`gofmt -l .` empty, generated client up to date, `go vet`, `go build`, `go test -race`.
+
+**Definition of done** — mirrors CI, so a green local run means a green CI run; paste the output:
+1. `gofmt -l .` prints nothing.
+2. `go generate ./internal/mcp/client/ && git diff --exit-code -- internal/mcp/client/` passes. Run it on every
+   change, not only ones that touch `docs/openapi.yaml`: the client goes stale when *another* PR changes the spec.
+3. `go vet ./...` and `go build ./...` pass.
+4. `go test -race ./...` passes.
+
 If the change touches entities or `internal/db/migrations/`, the Postgres schema tests above must pass too.
 
 ## Layout (one line per folder; it is not a conventional Go layout)
@@ -93,8 +103,11 @@ Reference implementations — copy these, don't invent:
 - Branch from `master` and open a PR against it; don't push to `master` directly. `.asf.yaml` blocks force-push
   and deletion on `master`, `release/*`, `rel/*` — and so does `.claude/settings.json`.
 - Commit subject: imperative, ≤72 chars, optional scope (`fix(slurm): …`); squash-merge adds `(#NNN)`.
-- One vertical or concern per PR. Before opening it, run `go test -race ./...` and the `convention-reviewer`
+- One vertical or concern per PR. Before opening it, run the definition of done and the `convention-reviewer`
   subagent (its checklist is `REVIEW.md`).
+- Right before merging, rebase onto the latest `master` and run the definition of done again. A PR's CI ran against
+  the `master` it branched from; if other PRs merged since (especially ones touching `docs/openapi.yaml`), a green
+  PR can still turn `master` red — that is how #738 broke the generated-code check.
 - Personal preferences go in `CLAUDE.local.md` (gitignored), not here.
 
 When compacting, keep: the definition of done, the list of files changed so far, and any failing test names with their errors.
